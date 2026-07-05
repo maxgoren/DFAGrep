@@ -65,6 +65,116 @@ re_ast* ParseRegex::clone(re_ast* node) {
     return ast;
 }
 
+re_ast* ParseRegex::parseCharClass() {
+    advance();
+    bool negated = false;
+    bool ranged = false;
+    if (expect('^')) {
+        negated = true;
+        advance();
+    }
+    string ccl;
+    while (!done() && !expect(']')) {
+        ccl.push_back(lookahead());
+        advance();
+    }
+    match(']');
+    string expanded;
+    for (int i = 0; i < ccl.size(); i++) {
+        if (i+2 < ccl.size() && ccl[i+1] == '-') {
+            char low = ccl[i], high = ccl[i+2];
+            if (negated) {
+                for (int i = 13; i < 128; i++) {
+                    if ((char)i < low) expanded.push_back((char)i);
+                    else if ((char)i > high) expanded.push_back((char)i);
+                }
+            } else {
+                for (char c = low; c <= high; c++)
+                    expanded.push_back(c);
+            }
+            i += 2;
+            ranged = true;
+        } else {
+            if (expanded.find(ccl[i]) == expanded.npos)
+                expanded.push_back(ccl[i]);
+        }
+    }
+    if (ranged == false && negated == true) {
+        string tmp;
+        for (int i = 13; i < 128; i++) {
+            if (expanded.find((char)i) == expanded.npos)
+                tmp.push_back((char)i);
+        }
+        expanded = tmp;
+    }
+    return new re_ast(CCL, expanded);
+}
+
+re_ast* ParseRegex::parseShortCutClass() {
+    re_ast* node = nullptr;
+    match('\\');
+    switch (lookahead()) {
+        case 'd': {
+            string ccl;
+            for (char c = '0'; c <= '9'; c++)
+                ccl.push_back(c);
+            node = new re_ast(CCL, ccl);
+        } break;
+        case 'D': {
+            string ccl;
+            for (int i = 13; i < 128; i++) {
+                if ((char)i < '0' || (char)i > '9') {
+                    ccl.push_back((char)i);
+                    printf("%c, ", ccl.back());
+                }
+            }
+            node = new re_ast(CCL, ccl);
+        } break;
+        case 'w': {
+            string ccl;
+            for (int i = 13; i < 128; i++) {
+                if (i >= 'A' && i <= 'Z')
+                    ccl.push_back((char)i);
+                else if (i >= 'a' && i <= 'z')
+                    ccl.push_back((char)i);
+                else if (i >= '0' && i <= '9')
+                    ccl.push_back((char)i);
+            }
+            ccl.push_back('_');
+            node = new re_ast(CCL, ccl);
+        } break;
+        case 'W': {
+            string ccl;
+            for (int i = 13; i < 128; i++) {
+                if (i >= 'A' && i <= 'Z')
+                    continue;
+                else if (i >= 'a' && i <= 'z')
+                    continue;
+                else if (i >= '0' && i <= '9')
+                    continue;
+                ccl.push_back((char)i);
+            }
+            node = new re_ast(CCL, ccl);
+        } break;
+        case 's': {
+            node = new re_ast(CCL, " \t\n\r");
+        } break;
+        case 'S': {
+            string ccl;
+            for (int i = 3; i < 128; i++) {
+                if ((char)i != ' ' && (char)i != '\t' && (char)i != '\r' && (char)i != '\n')
+                    ccl.push_back((char)i);
+            }
+            node = new re_ast(CCL, ccl);
+        } break;
+        default: 
+            node = new re_ast(CHAR, string(1, lookahead()));
+            break;
+    }
+    advance();
+    return node;
+}
+
 re_ast* ParseRegex::factor() {
     re_ast* node = nullptr;
     if (expect('(')) {
@@ -72,104 +182,14 @@ re_ast* ParseRegex::factor() {
         node = expr();
         match(')');
     } else if (expect('[')) {
-        node = new re_ast();
-        advance();
-        bool negated = false;
-        bool ranged = false;
-        if (expect('^')) {
-            negated = true;
-            advance();
-        }
-        string ccl;
-        while (!done() && !expect(']')) {
-            ccl.push_back(lookahead());
-            advance();
-        }
-        match(']');
-        string expanded;
-        for (int i = 0; i < ccl.size(); i++) {
-            if (i+2 < ccl.size() && ccl[i+1] == '-') {
-                char low = ccl[i], high = ccl[i+2];
-                if (negated) {
-                    for (int i = 13; i < 128; i++) {
-                        if ((char)i < low) expanded.push_back((char)i);
-                        else if ((char)i > high) expanded.push_back((char)i);
-                    }
-                } else {
-                    for (char c = low; c <= high; c++)
-                        expanded.push_back(c);
-                }
-                i += 2;
-                ranged = true;
-            } else {
-                if (expanded.find(ccl[i]) == expanded.npos)
-                    expanded.push_back(ccl[i]);
-            }
-        }
-        if (ranged == false && negated == true) {
-            string tmp;
-            for (int i = 13; i < 128; i++) {
-                if (expanded.find((char)i) == expanded.npos)
-                    tmp.push_back((char)i);
-            }
-            expanded = tmp;
-        }
-        node = new re_ast(CCL, expanded);
+        node = parseCharClass();
+    } else if (expect('\\')) {
+        node = parseShortCutClass();
     } else if (expect('.')) {
         node = new re_ast(ANY, string(1, lookahead()));
         advance();
     } else if (isalnum(lookahead()) || lookahead() == '#') {
         node = new re_ast(CHAR, string(1, lookahead()));
-        advance();
-    } else if (expect('\\')) {
-        advance();
-        switch (lookahead()) {
-            case 'd': {
-                string ccl;
-                for (char c = '0'; c <= '9'; c++)
-                    ccl.push_back(c);
-                node = new re_ast(CCL, ccl);
-            } break;
-            case 'D': {
-                string ccl;
-                for (int i = 13; i < 128; i++) {
-                    if ((char)i < '0' || (char)i > '9') {
-                        ccl.push_back((char)i);
-                        printf("%c, ", ccl.back());
-                    }
-                }
-                node = new re_ast(CCL, ccl);
-            } break;
-            case 'w': {
-                string ccl;
-                for (int i = 13; i < 128; i++) {
-                    if (i >= 'A' && i <= 'Z')
-                        ccl.push_back((char)i);
-                    else if (i >= 'a' && i <= 'z')
-                        ccl.push_back((char)i);
-                    else if (i >= '0' && i <= '9')
-                        ccl.push_back((char)i);
-                }
-                ccl.push_back('_');
-                node = new re_ast(CCL, ccl);
-            } break;
-            case 'W': {
-                string ccl;
-                for (int i = 13; i < 128; i++) {
-                    if (i >= 'A' && i <= 'Z')
-                        continue;
-                    else if (i >= 'a' && i <= 'z')
-                        continue;
-                    else if (i >= '0' && i <= '9')
-                        continue;
-                    ccl.push_back((char)i);
-                }
-                node = new re_ast(CCL, ccl);
-            } break;
-            default: 
-                node = new re_ast(CHAR, string(1, lookahead()));
-                break;
-        }
         advance();
     }
         

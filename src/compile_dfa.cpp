@@ -136,10 +136,7 @@ set<int> DFACompiler::getNext(DFAState* state, char sym) {
 DFA* DFACompiler::buildDFA(re_ast* ast, int num_states, char* aleph) {
     queue<DFAState*> fq;
     DFA* dfa = new DFA(num_states);
-    DFAState* ss = new DFAState;
-    ss->label = nextLabel();
-    ss->positions = firstpos[ast->id];
-    ss->accepting = false;
+    DFAState* ss = new DFAState(nextLabel(), false, firstpos[ast->id]);
     dfa->states[ss->label] = ss;
     dfa->num_states++;
     fq.push(ss);
@@ -148,24 +145,14 @@ DFA* DFACompiler::buildDFA(re_ast* ast, int num_states, char* aleph) {
         for (char* ic = aleph; *ic; ic++) {
             set<int> nextpos = getNext(curr, *ic);
             if (!nextpos.empty()) {
-                int found = -1;
-                for (int i = 0; i < dfa->num_states; i++) {
-                    auto m = dfa->states[i];
-                    if (equal(nextpos.begin(), nextpos.end(), m->positions.begin(), m->positions.end())) {
-                        found = m->label;
-                        break;
-                    }
-                }
-                if (found > -1) {
-                    curr->trans = new Transition(*ic, dfa->states[found], curr->trans);
+                DFAState* ex = dfa->getByPositions(nextpos);
+                if (ex != nullptr) {
+                    curr->trans[*ic] = ex;
                 } else {
-                    DFAState* ns = new DFAState();
-                    ns->label = nextLabel();
-                    ns->positions = nextpos;
-                    ns->accepting = false;
+                    DFAState* ns = new DFAState(nextLabel(), false, nextpos);;
                     dfa->states[ns->label] = ns;
                     dfa->num_states++;
-                    curr->trans = new Transition(*ic, ns, curr->trans);
+                    curr->trans[*ic] = ns;
                     fq.push(ns);
                 }
             }

@@ -14,8 +14,8 @@ void printDfa(DFA* dfa) {
         for (auto q : m->positions)
             cout<<q<<" ";
         cout<<"): ";
-        for (auto g = m->trans; g != nullptr; g = g->next) {
-            cout<<g->dest->label<<"("<<g->ch<<")  ";
+        for (auto g : m->trans) {
+            cout<<g.second->label<<"("<<g.first<<")  ";
         }
         cout<<endl;
     } 
@@ -23,20 +23,21 @@ void printDfa(DFA* dfa) {
 
 string match(DFA* dfa, string text) {
     DFAState* state = dfa->states[0];
+    DFAState* next = nullptr;
     int match_from = 0, match_to = 0;
     string matched;
-    for (int i = 0; i < text.length(); i++) {
-        DFAState* next = nullptr;
-        for (auto it = state->trans; it != nullptr; it = it->next) {
-            if (it->ch == text[i]) {
-                next = it->dest;
-            }
+    int i = 0;
+    while (i < text.length()) {
+        next = nullptr;
+        if (state->trans.find(text[i]) != state->trans.end()) {
+            next = state->trans[text[i]];
         }
         if (next == nullptr) {
             if (!dfa->starting_anchored) {
                 state = dfa->states[0];
-                match_from = i+1;
+                i = ++match_from;
             } else {
+                cout<<endl;
                 return matched;
             }
         } else if (next->accepting) {
@@ -51,8 +52,10 @@ string match(DFA* dfa, string text) {
                 matched.clear();
                 match_to = 0;
             }
+            i++;
         } else {
             state = next;
+            i++;
         }
     }
     return matched;

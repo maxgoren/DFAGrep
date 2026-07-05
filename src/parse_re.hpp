@@ -31,6 +31,8 @@ class ParseRegex {
         bool expect(char ch);
         bool match(char ch);
         re_ast* clone(re_ast* node);
+        re_ast* parseCharClass();
+        re_ast* parseShortCutClass();
         re_ast* factor();
         re_ast* term();
         re_ast* expr();
