@@ -6,6 +6,7 @@ bool show_match_count = false;
 bool show_line_no = false;
 bool show_in_context = false;
 bool show_dfa = false;
+bool match_all = false;
 
 void printDfa(DFA* dfa) {
     for (int i = 0; i < dfa->num_states; i++) {
@@ -43,6 +44,8 @@ string match(DFA* dfa, string text) {
         } else if (next->accepting) {
             match_to = i+1;
             state = next;
+            if (match_all)
+                cout<<"match found at "<<match_from<<": "<<text.substr(match_from, match_to-match_from)<<endl;
             if (matched.empty()) {
                 matched = text.substr(match_from, (match_to-match_from));
             } else if (match_to-match_from > matched.length()) {
@@ -84,7 +87,7 @@ void grep(string pattern) {
     long matchno = 0;
     while (fgets(buffer, 1020, stdin)) {
         string ret = match(dfa, buffer);
-        if (!ret.empty()) {
+        if (!ret.empty() && !match_all) {
             check_match(ret, buffer, line, ++matchno);
         }
         line++;
@@ -99,6 +102,7 @@ void showhelp() {
     cout<<"  -x print in context, displays entire line of match"<<endl;
     cout<<"  -n print line number of match, also turns on -x"<<endl;
     cout<<"  -c print total number of matches, number each match when combined with -n"<<endl;
+    cout<<"  -a show every match, not just longest"<<endl;
     cout<<"  -h show this menu"<<endl;
     cout<<"  -v show resulting dfa"<<endl;
 }
@@ -109,6 +113,7 @@ void setOptions(string args) {
         if (c == 'c') show_match_count = true;
         if (c == 'x') show_in_context = true;
         if (c == 'v') show_dfa = true;
+        if (c == 'a') match_all = true;
     }
 }
 
